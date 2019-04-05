@@ -1,1 +1,1 @@
-# N-body-solar-system
+# N-body simulation of the solar system
