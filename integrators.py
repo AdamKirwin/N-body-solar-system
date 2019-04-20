@@ -14,7 +14,7 @@ class VectorData:
 
 
 class Body:
-    """Class representing a typical object and properties."""
+    """Class representing a typical object and its properties."""
 
     def __init__(self, mass, position, velocity, old_position = None, old_velocity = None, radius=None, time_step=None,
                  E_potential = None, E_kinetic = None, E_total = None, name=""):
@@ -39,36 +39,38 @@ class Body:
 
 class EulerMethod:
     """Class for evaluation of the Euler method of integration.
-    Determines new trajectory using discrete timesteps and forces from influencing bodies."""
+    The most simple numerical solution to Newton's equations of motion.
+    Determines new trajectories in discrete timesteps from forces applied by influencing bodies."""
 
     def __init__(self, time_step, bodies_list):
         self.time_step = time_step
         self.bodies = bodies_list
 
     def perform_integration(self):
+        # initial data for step
         pos_arr = np.array([(i.position.x, i.position.y, i.position.z) for i in self.bodies[:]])
         vel_arr = np.array([(i.velocity.x, i.velocity.y, i.velocity.z) for i in self.bodies[:]])
         mass_arr = np.array([[i.mass] for i in self.bodies[:]])
         time_step_arr = np.array([[self.time_step] for i in self.bodies[:]])
 
+        # calculation of the acceleration on bodies from all other bodies
         dr_arr = pos_arr[np.newaxis, :] - pos_arr[:, np.newaxis]
         r_between_arr = np.sqrt(np.sum(dr_arr * dr_arr, axis=-1))
-        # [body_index][index] = # np.sqrt(np.sum((pos_arr[:, np.newaxis] - pos_arr[np.newaxis, :]) ** 2, axis=-1))
         r_between_arr[~np.isfinite(r_between_arr)] = 1
         tmp_arr = G_const * mass_arr / (r_between_arr * r_between_arr * r_between_arr)
         tmp_arr[~np.isfinite(tmp_arr)] = 0
         acc_arr = (dr_arr.T * tmp_arr).T
         acc_arr = acc_arr.sum(axis=1)
 
+        # new trajectory calculations
         pos_arr += vel_arr * time_step_arr
-
         vel_arr += acc_arr * time_step_arr
 
         for index, body in enumerate(self.bodies):
+            # update trajectories
             body.position.x = pos_arr[index][0]
             body.position.y = pos_arr[index][1]
             body.position.z = pos_arr[index][2]
-
             body.velocity.x = vel_arr[index][0]
             body.velocity.y = vel_arr[index][1]
             body.velocity.z = vel_arr[index][2]
@@ -76,18 +78,21 @@ class EulerMethod:
 
 class EulerCromerMethod:
     """Class for evaluation of the Euler-Cromer method of integration.
-    Symplectic version of Euler method, updating velocity from acting forces then position instead."""
+    Solves with Hamiltionian mechanics therefore symplectic.
+    Updates velocity and then position from acting forces."""
 
     def __init__(self, time_step, bodies_list):
         self.time_step = time_step
         self.bodies = bodies_list
 
     def perform_integration(self):
+        # initial data for step
         pos_arr = np.array([(i.position.x, i.position.y, i.position.z) for i in self.bodies[:]])
         vel_arr = np.array([(i.velocity.x, i.velocity.y, i.velocity.z) for i in self.bodies[:]])
         mass_arr = np.array([[i.mass] for i in self.bodies[:]])
         time_step_arr = np.array([[self.time_step] for i in self.bodies[:]])
 
+        # calculation of the acceleration on bodies from all other bodies
         dr_arr = pos_arr[np.newaxis, :] - pos_arr[:, np.newaxis]
         r_between_arr = np.sqrt(np.sum(dr_arr * dr_arr, axis=-1))
         r_between_arr[~np.isfinite(r_between_arr)] = 1
@@ -96,22 +101,22 @@ class EulerCromerMethod:
         acc_arr = (dr_arr.T * tmp_arr).T
         acc_arr = acc_arr.sum(axis=1)
 
+        # new trajectory calculations, velocity before position unlike the Euler method
         vel_arr += acc_arr * time_step_arr
-
         pos_arr += vel_arr * time_step_arr
 
         for index, body in enumerate(self.bodies):
+            # update trajectories
             body.position.x = pos_arr[index][0]
             body.position.y = pos_arr[index][1]
             body.position.z = pos_arr[index][2]
-
             body.velocity.x = vel_arr[index][0]
             body.velocity.y = vel_arr[index][1]
             body.velocity.z = vel_arr[index][2]
 
 
 class EulerRichardsonMethod:
-    """Class for evaluation of the Euler method of integration.
+    """Class for evaluation of the Euler-Richardson method of integration.
     Midstep version of Euler method."""
 
     def __init__(self, time_step, bodies_list):
@@ -119,42 +124,43 @@ class EulerRichardsonMethod:
         self.bodies = bodies_list
 
     def perform_integration(self):
+        # initial data for step
         pos_arr = np.array([(i.position.x, i.position.y, i.position.z) for i in self.bodies[:]])
         vel_arr = np.array([(i.velocity.x, i.velocity.y, i.velocity.z) for i in self.bodies[:]])
         mass_arr = np.array([[i.mass] for i in self.bodies[:]])
         time_step_arr = np.array([[self.time_step] for i in self.bodies[:]])
 
+        # calculation of the acceleration on bodies from all other bodies using starting trajectories
         dr_arr = pos_arr[np.newaxis, :] - pos_arr[:, np.newaxis]
         r_between_arr = np.sqrt(np.sum(dr_arr * dr_arr, axis=-1))
         r_between_arr[~np.isfinite(r_between_arr)] = 1
         tmp_arr = G_const * mass_arr / (r_between_arr * r_between_arr * r_between_arr)
         tmp_arr[~np.isfinite(tmp_arr)] = 0
         start_acc_arr = (dr_arr.T * tmp_arr).T
-        # start_acc_arr[~np.isfinite(start_acc_arr)] = 0
         start_acc_arr = start_acc_arr.sum(axis=1)
 
+        # midstep trajectory calculations
         vel_mid_arr = vel_arr + start_acc_arr * 0.5 * time_step_arr
-
         pos_mid_arr = pos_arr + vel_arr * 0.5 * time_step_arr
 
+        # calculation of the acceleration on bodies from all other bodies using midstep trajectories
         dr_arr = pos_mid_arr[np.newaxis, :] - pos_mid_arr[:, np.newaxis]
         r_between_arr = np.sqrt(np.sum(dr_arr * dr_arr, axis=-1))
         r_between_arr[~np.isfinite(r_between_arr)] = 1
         tmp_arr = G_const * mass_arr / (r_between_arr * r_between_arr * r_between_arr)
         tmp_arr[~np.isfinite(tmp_arr)] = 0
         acc_mid_arr = (dr_arr.T * tmp_arr).T
-        # start_acc_arr[~np.isfinite(start_acc_arr)] = 0
         acc_mid_arr = acc_mid_arr.sum(axis=1)
 
+        # new trajectory calculations
         vel_arr += acc_mid_arr * time_step_arr
-
         pos_arr += vel_mid_arr * time_step_arr
 
         for index, body in enumerate(self.bodies):
+            # update trajectories
             body.position.x = pos_arr[index][0]
             body.position.y = pos_arr[index][1]
             body.position.z = pos_arr[index][2]
-
             body.velocity.x = vel_arr[index][0]
             body.velocity.y = vel_arr[index][1]
             body.velocity.z = vel_arr[index][2]
@@ -162,6 +168,7 @@ class EulerRichardsonMethod:
 
 class RK4Method:
     """Class for evaluation of the Fourth Order Runge-Kutta method of integration.
+    Solves for Newton's equations of motion, therefore not symplectic.
     Takes an average of the forces acting over a timestep using different starting forces."""
     # TODO: rewrite as matrices
 
@@ -170,6 +177,7 @@ class RK4Method:
         self.bodies = bodies_list
 
     def __partial_step(self, p1, p2, time_step):
+        # calculation for the partial steps of the RK4 method
         ret = VectorData((0,0,0))
         ret.x = p1.x + p2.x * time_step
         ret.y = p1.y + p2.y * time_step
@@ -177,14 +185,17 @@ class RK4Method:
         return ret
 
     def acc_func(self, other_body, focus_body_current, vec):
+        # determine distance between two bodies
         dx = (other_body.position.x - focus_body_current.x)
         dy = (other_body.position.y - focus_body_current.y)
         dz = (other_body.position.z - focus_body_current.z)
 
+        # calculate total acceleration for vector calculations
         r_between = ((dx * dx) + (dy * dy) + (dz * dz))
         r_between = mp.sqrt(r_between)
         tmp = G_const * other_body.mass / (r_between * r_between * r_between)
 
+        # calculation of the new acceleration vector
         vec.x += tmp * dx
         vec.y += tmp * dy
         vec.z += tmp * dz
@@ -192,8 +203,8 @@ class RK4Method:
         return vec
 
     def calc_trajectory(self, body_index):
+        # call focus body class and setup partial step vectors
         focus_body = self.bodies[body_index]
-
         k1v = VectorData((0, 0, 0))
         k2v = VectorData((0, 0, 0))
         k3v = VectorData((0, 0, 0))
@@ -204,6 +215,8 @@ class RK4Method:
         k4p = VectorData((0, 0, 0))
 
         for index, other_body in enumerate(self.bodies):
+            # calculate the partial step accelerations acting on the focus body from all other bodies
+            # does not use old trajectory date => some error from using updated trajectories for successive bodies
             if index != body_index:
                 k1v = self.acc_func(other_body, focus_body.position, k1v)
 
@@ -223,13 +236,13 @@ class RK4Method:
                 k4v = self.acc_func(other_body, k4dp, k4v)
                 k4p = self.__partial_step(focus_body.velocity, k3v, self.time_step)
 
+        # calculate average acceleration and update trajectories
         focus_body.velocity.x = (focus_body.velocity.x + (self.time_step / 6.) *
                                  (k1v.x + (2. * k2v.x) + (2. * k3v.x) + k4v.x))
         focus_body.velocity.y = (focus_body.velocity.y + (self.time_step / 6.) *
                                  (k1v.y + (2. * k2v.y) + (2. * k3v.y) + k4v.y))
         focus_body.velocity.z = (focus_body.velocity.z + (self.time_step / 6.) *
                                  (k1v.z + (2. * k2v.z) + (2. * k3v.z) + k4v.z))
-
         focus_body.position.x = (focus_body.position.x + (self.time_step / 6.) *
                                  (k1p.x + (2. * k2p.x) + (2. * k3p.x) + k4p.x))
         focus_body.position.y = (focus_body.position.y + (self.time_step / 6.) *
@@ -245,56 +258,54 @@ class RK4Method:
 class VelocityVerletMethod: # synchronised / integer step version of leapfrog
     """Class for evaluation of the Velocity Verlet method of integration.
     Updates position and velocity at the same time variable unlike Leapfrog,
-    and incorporates velocity solving first time step problem in basic Verlet method.."""
+    and incorporates velocity, solving the first time step problem in basic Verlet method.."""
 
     def __init__(self, time_step, bodies_list):
         self.time_step = time_step
         self.bodies = bodies_list
 
     def perform_integration(self):
+        # initial data for step
         pos_arr = np.array([(i.position.x, i.position.y, i.position.z) for i in self.bodies[:]])
         vel_arr = np.array([(i.velocity.x, i.velocity.y, i.velocity.z) for i in self.bodies[:]])
         mass_arr = np.array([[i.mass] for i in self.bodies[:]])
 
+        # calculation of the acceleration on bodies from all other bodies using starting trajectories
         dr_arr = pos_arr[np.newaxis, :] - pos_arr[:, np.newaxis]
         r_between_arr = np.sqrt(np.sum(dr_arr * dr_arr, axis=-1))
         tmp_arr = G_const * mass_arr / (r_between_arr * r_between_arr * r_between_arr)
         tmp_arr[~np.isfinite(tmp_arr)] = 0
         start_acc_arr = (dr_arr.T * tmp_arr).T
-        # start_acc_arr[~np.isfinite(start_acc_arr)] = 0
         start_acc_arr = start_acc_arr.sum(axis=1)
 
+        # new position calculation using starting velocity
         pos_arr += vel_arr * self.time_step + 0.5 * start_acc_arr * self.time_step * self.time_step
 
+        # calculation of the acceleration on bodies from all other bodies using midstep position
         dr_arr = pos_arr[np.newaxis, :] - pos_arr[:, np.newaxis]
         r_between_arr = np.sqrt(np.sum(dr_arr * dr_arr, axis=-1))
         tmp_arr = G_const * mass_arr / (r_between_arr * r_between_arr * r_between_arr)
         tmp_arr[~np.isfinite(tmp_arr)] = 0
         new_acc_arr = (dr_arr.T * tmp_arr).T
-        # new_acc_arr[~np.isfinite(new_acc_arr)] = 0
         new_acc_arr = new_acc_arr.sum(axis=1)
 
+        # new velocity calculation using starting and new acceleration average
         vel_arr += (start_acc_arr + new_acc_arr) * 0.5 * self.time_step
 
         for index, body in enumerate(self.bodies):
+            # update trajectories
             body.position.x = pos_arr[index][0]
             body.position.y = pos_arr[index][1]
             body.position.z = pos_arr[index][2]
-
             body.velocity.x = vel_arr[index][0]
             body.velocity.y = vel_arr[index][1]
             body.velocity.z = vel_arr[index][2]
 
 
-# class LeapfrogMethod:
-#     """Class for evaluation of the Leapfrog method of integration.
-#     Updates position and velocity at staggered time steps and 'leapfrog' over each other."""
-# Not needed as variable leapfrog covers all analysis points
-
-
 class VariableLeapfrogMethod:
-    """"""
-
+    """Class for evaluation of the Velocity Verlet method of integration.
+    The velocity and position calculations leapfrog over one another in terms of time evaluated for."""
+    # TODO: fix issue of bodies with smaller timestep not following the same path as their matrices counterpart
     def __init__(self, time_step, bodies_list):
         self.time_step = time_step # Use largest timestep
         self.bodies = bodies_list
@@ -305,10 +316,12 @@ class VariableLeapfrogMethod:
         """Calculates the net acceleration of a body at the beginning of the step
         from all gravitational forces acting on it."""
 
+        # setup acceleration vector class and call focus body class
         acceleration = VectorData((0, 0, 0))
         focus_body = self.bodies[body_index]
 
         for index, other_body in enumerate(self.bodies):
+            # calculate and sum the accelerations from all other bodies acting on the focus body
             if index != body_index:
                 dx = (other_body.old_position.x - focus_body.position.x)
                 dy = (other_body.old_position.y - focus_body.position.y)
@@ -324,81 +337,92 @@ class VariableLeapfrogMethod:
         return acceleration
 
     def perform_integration(self):
+        # add global timestep for final time of current step
         self.time += self.time_step
 
         for body_index, focus_body in enumerate(self.bodies):
+            # update previous position for other bodies to calculate from (and not use 'future'/updated positions)
             focus_body.old_position = focus_body.position
 
         for body_index, focus_body in enumerate(self.bodies):
+            # corrects timesteps that would step out of range, designed for precision by choosing smaller timestep
             if self.fixed_ts is False and self.time_step % focus_body.time_step != 0:
-                # corrects timesteps that would step out of range, designed for precision by choosing smaller timestep
                 focus_body.time_step = self.time_step / int(math.ceil(self.time_step / focus_body.time_step))
-                # print("changing " + str(focus_body.name) + " timestep to " + str(focus_body.time_step))
+                print("changing " + str(focus_body.name) + " timestep to " + str(focus_body.time_step))
 
-            while focus_body.body_time < self.time:
+            while focus_body.body_time < self.time:  # calculates for a bodies local steps until caught up with global
+                # calculate acceleration from starting trajectories
                 acceleration = self._calculate_acceleration(body_index)
+
+                # calculate midstep velocity from starting acceleration
                 focus_body.velocity.x += acceleration.x * focus_body.time_step * 0.5
                 focus_body.velocity.y += acceleration.y * focus_body.time_step * 0.5
                 focus_body.velocity.z += acceleration.z * focus_body.time_step * 0.5
 
+                # calculate new position from midstep velocity
                 focus_body.position.x += focus_body.velocity.x * focus_body.time_step
                 focus_body.position.y += focus_body.velocity.y * focus_body.time_step
                 focus_body.position.z += focus_body.velocity.z * focus_body.time_step
 
+                # calculate new acceleration with new position
                 acceleration = self._calculate_acceleration(body_index)
+
+                # calculate new velocity from new acceleration
                 focus_body.velocity.x += acceleration.x * focus_body.time_step * 0.5
                 focus_body.velocity.y += acceleration.y * focus_body.time_step * 0.5
                 focus_body.velocity.z += acceleration.z * focus_body.time_step * 0.5
 
+                # update body local time with bodies timestep
                 focus_body.body_time += focus_body.time_step
-        self.fixed_ts = True
+
+        self.fixed_ts = True  # updates correct timesteps variable to stop correction from repeating
 
 
 class VariableLeapfrogMethodM:  # Fixed timestep because of matrices
-    """"""
+    """Class for evaluation of the Velocity Verlet method of integration.
+    The velocity and position calculations leapfrog over one another in terms of time evaluated for.
+    This method uses NumPy arrays and therefore cannot current utilise variable timesteps and is only for evaluation"""
 
-    def __init__(self, time_step, bodies_list):  # Bodies with.position, mass,.velocity, name data
-        self.time_step = time_step  # Change for variable timestep per body
+    def __init__(self, time_step, bodies_list):
+        self.time_step = time_step
         self.bodies = bodies_list
 
     def perform_integration(self):
+        # initial data for step
         pos_arr = np.array([(i.position.x, i.position.y, i.position.z) for i in self.bodies[:]])
         vel_arr = np.array([(i.velocity.x, i.velocity.y, i.velocity.z) for i in self.bodies[:]])
         mass_arr = np.array([[i.mass] for i in self.bodies[:]])
         time_step_arr = np.array([[self.time_step] for i in self.bodies[:]])
 
+        # calculation of the acceleration on bodies from all other bodies using starting trajectories
         dr_arr = pos_arr[np.newaxis, :] - pos_arr[:, np.newaxis]
-        r_between_arr = np.sqrt(np.sum(dr_arr * dr_arr,
-                                       axis=-1))
-
+        r_between_arr = np.sqrt(np.sum(dr_arr * dr_arr, axis=-1))
         r_between_arr[~np.isfinite(r_between_arr)] = 1
         tmp_arr = G_const * mass_arr / (r_between_arr * r_between_arr * r_between_arr)
         tmp_arr[~np.isfinite(tmp_arr)] = 0
-        start_acc_arr = (dr_arr.T * tmp_arr).T  # tmp_arr.T * dr_arr
-        # start_acc_arr[~np.isfinite(start_acc_arr)] = 0
+        start_acc_arr = (dr_arr.T * tmp_arr).T
         start_acc_arr = start_acc_arr.sum(axis=1)
 
-        vel_mid_arr = vel_arr + start_acc_arr * 0.5 * time_step_arr  # Still fixed
-
+        # midstep velocity and new position calculations
+        vel_mid_arr = vel_arr + start_acc_arr * 0.5 * time_step_arr
         pos_arr += vel_mid_arr * time_step_arr
 
-        # Variable Leapfrog method 'kick-drift-kick' # Pos, vel, pos may also work i believe?
+        # calculation of the acceleration on bodies from all other bodies using midstep trajectories
         dr_arr = pos_arr[np.newaxis, :] - pos_arr[:, np.newaxis]
-        r_between_arr = np.sqrt(np.sum(dr_arr * dr_arr,
-                                       axis=-1))
+        r_between_arr = np.sqrt(np.sum(dr_arr * dr_arr, axis=-1))
         tmp_arr = G_const * mass_arr / (r_between_arr * r_between_arr * r_between_arr)
         tmp_arr[~np.isfinite(tmp_arr)] = 0
-        new_acc_arr = (dr_arr.T * tmp_arr).T  # tmp_arr.T * dr_arr
-        # new_acc_arr[~np.isfinite(new_acc_arr)] = 0
+        new_acc_arr = (dr_arr.T * tmp_arr).T
         new_acc_arr = new_acc_arr.sum(axis=1)
 
+        # new velocity calculation
         vel_arr = vel_mid_arr + new_acc_arr * 0.5 * time_step_arr
 
         for index, body in enumerate(self.bodies):
+            # update trajectories
             body.position.x = pos_arr[index][0]
             body.position.y = pos_arr[index][1]
             body.position.z = pos_arr[index][2]
-
             body.velocity.x = vel_arr[index][0]
             body.velocity.y = vel_arr[index][1]
             body.velocity.z = vel_arr[index][2]
